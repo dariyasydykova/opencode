@@ -125,12 +125,12 @@ p_dist_gif <- animate(p_dist,
                       device = "png",
                       width = 400, 
                       height = 400, 
-                      renderer = file_renderer("./content/post/gganim", prefix = "p_dist", overwrite = TRUE))
+                      renderer = file_renderer("./gganim", prefix = "p_dist", overwrite = TRUE))
 p_ROC_gif <- animate(p_ROC, 
                      device = "png",
                      width = 400, 
                      height = 400,
-                     renderer = file_renderer("./content/post/gganim", prefix = "p_ROC", overwrite = TRUE))
+                     renderer = file_renderer("./gganim", prefix = "p_ROC", overwrite = TRUE))
 
 # stitch two animations together
 # read the first image (frame) of each animation
