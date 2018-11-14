@@ -1,0 +1,152 @@
+# load packages needed to run this code
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(cowplot)
+library(plotROC)
+library(gganimate)
+library(magick)
+
+# this function calculates true positive rate and false positive to make an ROC curve
+calc_ROC <- function(probabilities, known_truth, model.name = NULL)
+{
+  outcome <- as.numeric(factor(known_truth))-1
+  pos <- sum(outcome) # total known positives
+  neg <- sum(1-outcome) # total known negatives
+  pos_probs <- outcome*probabilities # probabilities for known positives
+  neg_probs <- (1-outcome)*probabilities # probabilities for known negatives
+  true_pos <- sapply(probabilities,
+                     function(x) sum(pos_probs>= x)/pos) # true pos. rate
+  false_pos <- sapply(probabilities,
+                      function(x) sum(neg_probs>= x)/neg)
+  if (is.null(model.name))
+    result <- data.frame(true_pos, false_pos)
+  else
+    result <- data.frame(true_pos, false_pos, model.name)
+  result %>% arrange(false_pos, true_pos)
+}
+
+# make a reduced iris data set that only contains virginica and versicolor species
+iris.small <- filter(iris, Species %in% c("virginica", "versicolor"))
+
+# fit a logistic regression model to the data
+glm.out <- glm(Species ~ Petal.Width + Petal.Length + Sepal.Width,
+               data = iris.small,
+               family = binomial)
+
+# extract linear predictors for each observation
+lr_data <- data.frame(predictor = glm.out$linear.predictors, 
+                      Species = iris.small$Species)
+
+# get a density plot for each species
+d_virg <- density(filter(lr_data, Species == "virginica")$predictor)
+d_vers <- density(filter(lr_data, Species == "versicolor")$predictor)
+
+# move each species' density plot to overlap at the center.
+# this is the starting point
+virg_t1 <- data.frame(predictor = d_virg$x - 11.7, density = d_virg$y, time = 1, Species = "virginica")
+vers_t1 <- data.frame(predictor = d_vers$x + 11.8, density = d_vers$y, time = 1, Species = "versicolor")
+
+# change predictor values to shift the density plot along the x-axis
+# add `time` variable to respresent a state in an animation
+virg_t1 %>% mutate(predictor = predictor + 2.5, time = 2) -> virg_t2
+vers_t1 %>% mutate(predictor = predictor - 2.5, time = 2) -> vers_t2
+
+virg_t1 %>% mutate(predictor = predictor + 5, time = 3) -> virg_t3
+vers_t1 %>% mutate(predictor = predictor - 5, time = 3) -> vers_t3
+
+virg_t1 %>% mutate(predictor = predictor + 7.5, time = 4) -> virg_t4
+vers_t1 %>% mutate(predictor = predictor - 7.5, time = 4) -> vers_t4
+
+virg_t1 %>% mutate(predictor = predictor + 10, time = 5) -> virg_t5
+vers_t1 %>% mutate(predictor = predictor - 10, time = 5) -> vers_t5
+
+virg_t1 %>% mutate(predictor = predictor + 15, time = 6) -> virg_t6
+vers_t1 %>% mutate(predictor = predictor - 15, time = 6) -> vers_t6
+
+# combine virginica and versicolor data sets separately.
+# this is essential to move density plots independently of each other
+rbind(virg_t1, virg_t2, virg_t3, virg_t4, virg_t5, virg_t6) -> virg_data
+rbind(vers_t1, vers_t2, vers_t3, vers_t4, vers_t5, vers_t6) -> vers_data
+
+# make an animation with distributions of linear predictors
+p_dist <- ggplot(mapping = aes(predictor, density, group = 1)) +
+  geom_area(data = virg_data, alpha = .6, fill = "#001889") +
+  geom_area(data = vers_data, alpha = .6, fill = "#AB1488") +
+  transition_states(time, transition_length = 1, state_length = 1) +
+  theme_cowplot()
+
+# create a new data frame with linear predictors, species, and time
+virg_t1 <- lr_data %>% filter(Species == "virginica") %>% mutate(predictor = predictor - 11.7, time = 1)
+vers_t1 <- lr_data %>% filter(Species == "versicolor") %>% mutate(predictor = predictor + 11.8, time = 1)
+
+# change predictor values and add `time` variable to respresent a state in an animation
+# for each time point, changes in predictor values should match to the predictor values of the density plot
+virg_t1 %>% mutate(predictor = predictor + 2.5, time = 2) -> virg_t2
+vers_t1 %>% mutate(predictor = predictor - 2.5, time = 2) -> vers_t2
+
+virg_t1 %>% mutate(predictor = predictor + 5, time = 3) -> virg_t3
+vers_t1 %>% mutate(predictor = predictor - 5, time = 3) -> vers_t3
+
+virg_t1 %>% mutate(predictor = predictor + 7.5, time = 4) -> virg_t4
+vers_t1 %>% mutate(predictor = predictor - 7.5, time = 4) -> vers_t4
+
+virg_t1 %>% mutate(predictor = predictor + 10, time = 5) -> virg_t5
+vers_t1 %>% mutate(predictor = predictor - 10, time = 5) -> vers_t5
+
+virg_t1 %>% mutate(predictor = predictor + 15, time = 6) -> virg_t6
+vers_t1 %>% mutate(predictor = predictor - 15, time = 6) -> vers_t6
+
+# combine all data frames and calculate ROC curves and AUC values
+rbind(virg_t1, virg_t2, virg_t3, virg_t4, virg_t5, virg_t6,
+      vers_t1, vers_t2, vers_t3, vers_t4, vers_t5, vers_t6) %>%
+  mutate(probabilities = exp(predictor)/(1+exp(predictor))) %>%
+  group_by(time) %>%
+  do(results = calc_ROC(probabilities = .$probabilities,
+                        known_truth = .$Species)) %>%
+  group_by(time) %>%
+  do(as.data.frame(.$results)) %>%
+  mutate(delta=false_pos-lag(false_pos)) %>% 
+  mutate(AUC=round(sum(delta*true_pos, na.rm=T), 3)) -> ROC
+
+# make an animation with ROC curves
+p_ROC <- ggplot(data = ROC, aes(x = false_pos, y = true_pos)) +
+  geom_line(size = 1) +
+  geom_abline(intercept = 0, slope = 1, color = "#ECC000") +
+  transition_states(AUC, transition_length = 1, state_length = 1) +
+  labs(title = "AUC = {closest_state}") +
+  scale_x_continuous(name = "False positive rate") +
+  scale_y_continuous(name = "True positive rate") +
+  theme_cowplot()
+
+# save each animation as individual frames
+# each frame will be saved as a PNG image
+p_dist_gif <- animate(p_dist, 
+                      device = "png",
+                      width = 400, 
+                      height = 400, 
+                      renderer = file_renderer("./content/post/gganim", prefix = "p_dist", overwrite = TRUE))
+p_ROC_gif <- animate(p_ROC, 
+                     device = "png",
+                     width = 400, 
+                     height = 400,
+                     renderer = file_renderer("./content/post/gganim", prefix = "p_ROC", overwrite = TRUE))
+
+# stitch two animations together
+# read the first image (frame) of each animation
+a <- image_read(p_dist_gif[[1]]) 
+b <- image_read(p_ROC_gif[[1]])
+# combine the two images into a single image
+combined <- image_append(c(a,b))
+new_gif <- c(combined) 
+for(i in 2:100){ # combine images frame by frame
+  a <- image_read(p_dist_gif[[i]])
+  b <- image_read(p_ROC_gif[[i]])
+  combined <- image_append(c(a,b))
+  new_gif <- c(new_gif,combined)
+}
+
+# make an animation of the combined images
+combined_gif <- image_animate(new_gif)
+# save as gif
+image_write(combined_gif, "predictor_disr_and_ROC.gif")
