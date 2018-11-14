@@ -3,7 +3,6 @@ library(ggplot2)
 library(dplyr)
 library(tidyr)
 library(cowplot)
-library(plotROC)
 library(gganimate)
 library(magick)
 
@@ -134,11 +133,11 @@ p_ROC_gif <- animate(p_ROC,
 
 # stitch two animations together
 # read the first image (frame) of each animation
-a <- image_read(p_dist_gif[[1]]) 
+a <- image_read(p_dist_gif[[1]])
 b <- image_read(p_ROC_gif[[1]])
 # combine the two images into a single image
 combined <- image_append(c(a,b))
-new_gif <- c(combined) 
+new_gif <- c(combined)
 for(i in 2:100){ # combine images frame by frame
   a <- image_read(p_dist_gif[[i]])
   b <- image_read(p_ROC_gif[[i]])
