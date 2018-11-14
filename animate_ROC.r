@@ -7,7 +7,7 @@ library(plotROC)
 library(gganimate)
 library(magick)
 
-# this function calculates true positive rate and false positive to make an ROC curve
+# this function calculates true positive rate and false positive rate to make an ROC curve
 calc_ROC <- function(probabilities, known_truth, model.name = NULL)
 {
   outcome <- as.numeric(factor(known_truth))-1
@@ -98,15 +98,15 @@ virg_t1 %>% mutate(predictor = predictor + 15, time = 6) -> virg_t6
 vers_t1 %>% mutate(predictor = predictor - 15, time = 6) -> vers_t6
 
 # combine all data frames and calculate ROC curves and AUC values
-rbind(virg_t1, virg_t2, virg_t3, virg_t4, virg_t5, virg_t6,
+rbind(virg_t1, virg_t2, virg_t3, virg_t4, virg_t5, virg_t6, # combine all data frames together
       vers_t1, vers_t2, vers_t3, vers_t4, vers_t5, vers_t6) %>%
-  mutate(probabilities = exp(predictor)/(1+exp(predictor))) %>%
-  group_by(time) %>%
-  do(results = calc_ROC(probabilities = .$probabilities,
+  mutate(probabilities = exp(predictor)/(1+exp(predictor))) %>% # calculate probabilities for linear predictors
+  group_by(time) %>% 
+  do(results = calc_ROC(probabilities = .$probabilities, # calculate TP rate and FP rate for every possible cutoff
                         known_truth = .$Species)) %>%
   group_by(time) %>%
-  do(as.data.frame(.$results)) %>%
-  mutate(delta=false_pos-lag(false_pos)) %>% 
+  do(as.data.frame(.$results)) %>% # store output from calc_ROC() in the data frame
+  mutate(delta=false_pos-lag(false_pos)) %>%# calculate AUC values
   mutate(AUC=round(sum(delta*true_pos, na.rm=T), 3)) -> ROC
 
 # make an animation with ROC curves
