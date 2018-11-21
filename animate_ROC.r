@@ -1,3 +1,6 @@
+# New version of this code and the animation it produces can be found at
+# https://github.com/dariyasydykova/open_projects/tree/master/ROC_animation
+
 # load packages needed to run this code
 library(ggplot2)
 library(dplyr)
